@@ -109,3 +109,37 @@ def calculate(values):
         "region": region,
         "warnings": warnings,
     }
+
+
+def calculate_approximate(values):
+    """คำนวณ DC operating point แบบ Approximate (stiff voltage divider)
+
+    ต่างจาก calculate() ตรงที่ถือว่า divider แข็งแรงพอให้ VB = VTH
+    (ละเลยกระแสโหลดของเบส) — ใช้เปรียบเทียบกับวิธี Exact/Thevenin
+    คืน dict: vb, ve, vc, vce, ib, ic, ie (V/A)
+    """
+    vcc = values["vcc"]
+    r1 = values["r1"]
+    r2 = values["r2"]
+    rc = values["rc"]
+    re = values["re"]
+    beta = values["beta"]
+    vbe = values["vbe"]
+
+    vb = vcc * r2 / (r1 + r2)   # VB = VTH
+    ve = vb - vbe
+    ie = ve / re
+    ic = ie * beta / (beta + 1)
+    ib = ie / (beta + 1)
+    vc = vcc - ic * rc
+    vce = vc - ve
+
+    return {
+        "vb": vb,
+        "ve": ve,
+        "vc": vc,
+        "vce": vce,
+        "ib": ib,
+        "ic": ic,
+        "ie": ie,
+    }

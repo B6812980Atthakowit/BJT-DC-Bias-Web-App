@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BJT DC Bias Calculator — Common Emitter (Voltage Divider)</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <h1>BJT DC Bias Web App</h1>
+    <p class="subtitle">วงจรขยาย NPN Common-Emitter แบบ Voltage-Divider Bias — คำนวณโดย Python Backend (Flask)</p>
+
+    <form method="POST" action="/calculate" class="card form-card">
+      <h2>ค่าอุปกรณ์และพารามิเตอร์</h2>
+
+      {% if errors %}
+      <div class="errors" role="alert">
+        <strong>กรอกข้อมูลไม่ถูกต้อง:</strong>
+        <ul>
+          {% for e in errors %}
+          <li>{{ e }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <div class="grid">
+        <label>VCC [V] — แรงดันจ่าย
+          <input type="number" step="any" name="vcc" placeholder="เช่น 12"
+                 value="{{ form.get('vcc', '') if form else '' }}" required>
+        </label>
+        <label>R1 [kΩ] — บน (VCC–Base)
+          <input type="number" step="any" name="r1" placeholder="เช่น 100"
+                 value="{{ form.get('r1', '') if form else '' }}" required>
+        </label>
+        <label>R2 [kΩ] — ล่าง (Base–GND)
+          <input type="number" step="any" name="r2" placeholder="เช่น 22"
+                 value="{{ form.get('r2', '') if form else '' }}" required>
+        </label>
+        <label>RC [kΩ] — ตัวต้านทานคอลเลกเตอร์
+          <input type="number" step="any" name="rc" placeholder="เช่น 2.2"
+                 value="{{ form.get('rc', '') if form else '' }}" required>
+        </label>
+        <label>RE [kΩ] — ตัวต้านทานอิมิตเตอร์
+          <input type="number" step="any" name="re" placeholder="เช่น 1"
+                 value="{{ form.get('re', '') if form else '' }}" required>
+        </label>
+        <label>β (beta) — อัตราขยายกระแส
+          <input type="number" step="any" name="beta" placeholder="เช่น 100"
+                 value="{{ form.get('beta', '') if form else '' }}" required>
+        </label>
+        <label>VBE [V] — แรงดันเบส–อิมิตเตอร์
+          <input type="number" step="any" name="vbe" placeholder="เช่น 0.7"
+                 value="{{ form.get('vbe', '') if form else '' }}" required>
+        </label>
+      </div>
+
+      <button type="submit">Calculate DC Bias</button>
+    </form>
+
+    {% if result %}
+    <section class="card result-card">
+      <h2>DC Bias Results — จุดปฏิบัติการ (Operating Point)</h2>
+
+      <p class="region-badge region-{{ result.region }}">
+        Operating Region:
+        {% if result.region == 'forward-active' %}Forward-Active
+        {% elif result.region == 'cutoff' %}Cutoff
+        {% else %}Saturation{% endif %}
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>ปริมาณ</th><th>สัญลักษณ์</th><th>ค่า</th><th>หน่วย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>แรงดันเทวินอร์ทีเวียน</td><td>VTH</td><td>{{ "%.4f"|format(result.vth) }}</td><td>V</td></tr>
+          <tr><td>ความต้านทานเทวิน</td><td>RTH</td><td>{{ "%.4f"|format(result.rth / 1000) }}</td><td>kΩ</td></tr>
+          <tr><td>แรงดันเบส</td><td>VB</td><td>{{ "%.4f"|format(result.vb) }}</td><td>V</td></tr>
+          <tr><td>แรงดันอิมิตเตอร์</td><td>VE</td><td>{{ "%.4f"|format(result.ve) }}</td><td>V</td></tr>
+          <tr><td>แรงดันคอลเลกเตอร์</td><td>VC</td><td>{{ "%.4f"|format(result.vc) }}</td><td>V</td></tr>
+          <tr><td>แรงดันคอลเลกเตอร์–อิมิตเตอร์</td><td>VCE</td><td>{{ "%.4f"|format(result.vce) }}</td><td>V</td></tr>
+          <tr><td>กระแสเบส</td><td>IB</td><td>{{ "%.4f"|format(result.ib * 1e6) }}</td><td>µA</td></tr>
+          <tr><td>กระแสคอลเลกเตอร์</td><td>IC</td><td>{{ "%.4f"|format(result.ic * 1000) }}</td><td>mA</td></tr>
+          <tr><td>กระแสอิมิตเตอร์</td><td>IE</td><td>{{ "%.4f"|format(result.ie * 1000) }}</td><td>mA</td></tr>
+        </tbody>
+      </table>
+
+      {% if result.warnings %}
+      <div class="warnings" role="alert">
+        {% for w in result.warnings %}
+        <p>{{ w }}</p>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <p class="model-note">แบบจำลอง: Forward-Active Approximation (β และ VBE คงที่)</p>
+    </section>
+    {% endif %}
+
+    {% if result and result.region == 'forward-active' %}
+    <section class="card approx-card">
+      <h2>เปรียบเทียบ: วิธี Approximate (Stiff Voltage Divider)</h2>
+      <p class="approx-note">
+        วิธีประมาณพื้นฐาน: ถือว่า voltage divider แข็งแรงพอให้
+        <strong>VB = VTH</strong> (ละเลยกระแสโหลดของเบส) —
+        VE = VB − VBE, IE = VE/RE, IC = IE·β/(β+1)
+      </p>
+      <table>
+        <thead>
+          <tr><th>ปริมาณ</th><th>สัญลักษณ์</th><th>ค่า (Approximate)</th><th>หน่วย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>แรงดันเบส</td><td>VB</td><td>{{ "%.4f"|format(approx.vb) }}</td><td>V</td></tr>
+          <tr><td>แรงดันอิมิตเตอร์</td><td>VE</td><td>{{ "%.4f"|format(approx.ve) }}</td><td>V</td></tr>
+          <tr><td>แรงดันคอลเลกเตอร์</td><td>VC</td><td>{{ "%.4f"|format(approx.vc) }}</td><td>V</td></tr>
+          <tr><td>แรงดันคอลเลกเตอร์–อิมิตเตอร์</td><td>VCE</td><td>{{ "%.4f"|format(approx.vce) }}</td><td>V</td></tr>
+          <tr><td>กระแสเบส</td><td>IB</td><td>{{ "%.4f"|format(approx.ib * 1e6) }}</td><td>µA</td></tr>
+          <tr><td>กระแสคอลเลกเตอร์</td><td>IC</td><td>{{ "%.4f"|format(approx.ic * 1000) }}</td><td>mA</td></tr>
+          <tr><td>กระแสอิมิตเตอร์</td><td>IE</td><td>{{ "%.4f"|format(approx.ie * 1000) }}</td><td>mA</td></tr>
+        </tbody>
+      </table>
+      <p class="approx-note">
+        ตัวอย่างในตำรา/สไลด์ที่ปัด VB ≈ 2.2 V ก่อนคำนวณต่อ (VE ≈ 1.5 V,
+        IC ≈ 1.5 mA, VCE ≈ 7.2 V) มาจากวิธีนี้ — ส่วนตารางหลักด้านบนเป็นวิธี
+        Exact/Thevenin ตามสมการในเอกสาร Lab ซึ่งคำนึงผลกระทบของ RTH ต่อกระแสเบส
+        จึงได้ค่าต่างกันเล็กน้อย (ยิ่ง R2 เทียบ R1 เล็ก ทั้งสองวิธียิ่งใกล้กัน)
+      </p>
+    </section>
+    {% endif %}
+
+    <footer>
+      <p>ENG29 2121 · Lab 02 — Flask + Python Backend · คำนวณที่ Server ทุกครั้งที่กด Calculate</p>
+    </footer>
+  </main>
+</body>
+</html>
