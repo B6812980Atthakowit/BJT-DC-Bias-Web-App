@@ -2,7 +2,35 @@
 
 เอกสารนี้บันทึกผลการทดสอบจริง (ไม่ได้แต่งเติม) ใช้เป็นหลักฐานยืนยันว่าโปรเจกต์ผ่านเกณฑ์การรับ A1–A7 ของ Lab 02
 
-## 1. ผลการรัน Automated Tests (ล่าสุด)
+## 0. Lab 03 — บันทึกผล Voltage Divider ก่อนแก้ (Baseline A1)
+
+รันวันที่ 2026-11-17 ด้วย `.venv\Scripts\python.exe -m flask --app app run` **ก่อนแก้โค้ดใด ๆ** เปิด `http://127.0.0.1:5000/` กรอกชุดเดิมแล้วกด Calculate จริง วิธีที่ใช้: **OpenCode Browser** (built-in browser tool ของ OpenCode Desktop — อ่าน snapshot หน้าเว็บและดู network แทนการอ่านโค้ด)
+
+**อินพุต:** VCC = 12 V, R1 = 100 kΩ, R2 = 22 kΩ, RC = 2.2 kΩ, RE = 1 kΩ, β = 100, VBE = 0.70 V
+
+**ผลที่อ่านจากหน้าเว็บจริง (ตารางหลัก Exact/Thevenin):**
+
+| ปริมาณ | ค่าที่เห็น | หน่วย |
+|---|---|---|
+| VTH | 2.1639 | V |
+| RTH | 18.0328 | kΩ |
+| VB | 1.9422 | V |
+| VE | 1.2422 | V |
+| VC | 9.2943 | V |
+| **VCE** | **8.0522** | **V** |
+| IB | 12.2986 | µA |
+| **IC** | **1.2299** | **mA** |
+| IE | 1.2422 | mA |
+
+Operating Region: **Forward-Active** · ตาราง Approximate ที่แสดงร่วม: VB = 2.1639 V, VE = 1.4639 V, VC = 8.8112 V, VCE = 7.3473 V, IB = 14.4944 µA, IC = 1.4494 mA, IE = 1.4639 mA
+
+**หลักฐาน:** `docs/lab03-baseline-a1.jpeg` (ภาพหน้าเว็บหลังกด Calculate) · network tool พบคำขอ `POST http://127.0.0.1:5000/calculate` จริง
+
+**Playwright MCP: NOT RUN** — ตรวจแล้วเครื่องนี้ไม่มี `node`/`npx` บน PATH (และไม่พบ Node ในตำแหน่งติดตั้งมาตรฐาน) ไม่มี `opencode.json` ในโปรเจกต์ และ session นี้ไม่มี MCP server `playwright` ปรากฏ จึงใช้ OpenCode Browser ตามวิธีสำรองที่ใบงานอนุญาต โดยต้องระบุวิธีจริงในตาราง A1–A5 ว่าเป็น OpenCode Browser
+
+> ค่าชุดนี้คือค่าที่ต้องได้อีกครั้งหลังเพิ่ม Fixed/Emitter Bias — ถ้า A1 เปลี่ยนแปลว่า Divider เสียจากการแก้
+
+## 1. ผลการรัน Automated Tests — Lab 02 (ก่อนเพิ่มโหมด)
 
 คำสั่งที่รัน:
 
@@ -88,6 +116,44 @@ OK
 - **ตารางรอง (Approximate / stiff divider)** ถือว่า `VB = VTH` ละเลยกระแสโหลดของเบส — ตรงกับตัวเลขตัวอย่างในตำราบางเล่ม (VB≈2.2, IC≈1.5, VCE≈7.2 เมื่อปัดทศนิยม 1 ตำแหน่ง)
 - เอกสาร Lab ระบุเองว่าตัวเลขในภาพตัวอย่างเป็น "ค่าประกอบภาพ ไม่ใช่คำตอบอ้างอิง" — แอปจึงยึดสมการในเอกสารเป็นหลัก พร้อมแสดงทั้งสองวิธีเพื่อเปรียบเทียบ
 
+## 6. Lab 03 — ผลตรวจ A1–A5 บนหน้าเว็บจริง (Fixed / Emitter / Divider)
+
+รันวันที่ 2026-11-17 หลังเพิ่มโหมด Fixed และ Emitter แล้ว · เซิร์ฟเวอร์ `.venv\Scripts\python.exe -m flask --app app run` → `http://127.0.0.1:5000/` · วิธีตรวจ: **OpenCode Browser** (เปิดหน้าเว็บจริง เลือกโหมดด้วย `<select name="mode">` + ปุ่ม "เปลี่ยนโหมด" กรอกช่องของโหมดนั้น กด **Calculate DC Bias** แล้วอ่าน snapshot หลังส่งฟอร์มทุกครั้ง — ไม่ได้อ่านค่าจากโค้ด)
+
+**ชุดค่าคงที่ร่วม:** VCC = 12 V · RC = 2.2 kΩ · β = 100 · VBE = 0.70 V · อินพุตตัวต้านทานกรอกเป็น kΩ (1 MΩ = 1000 kΩ)
+
+| กรณี | โหมด + อินพุตที่กรอก | ค่าคาดหมายอิสระ (ก่อนรัน) | ค่าที่อ่านได้จริงจากหน้าเว็บ | Δ | สถานะ | หลักฐาน |
+|---|---|---|---|---|---|---|
+| **A1** | Divider · R1=100 kΩ, R2=22 kΩ, RE=1 kΩ | IC = 1.2299 mA · VCE = 8.0522 V | IC = **1.2299 mA** · VCE = **8.0522 V** · region Forward-Active · ตาราง Approximate แสดง | 0 | **PASS** | `docs/lab03-baseline-a1.jpeg` (baseline) + ตรวจซ้ำหลังแก้ |
+| **A2** | Fixed · RB=1000 kΩ | IC = 1.1300 mA · VCE = 9.5140 V | IC = **1.1300 mA** · VCE = **9.5140 V** · IB = 11.3000 µA · VE = 0.0000 V · ไม่มีตาราง Approximate | 0 | **PASS** | ตรวจใน OpenCode Browser (snapshot หลัง POST) |
+| **A3** | Emitter · RB=1000 kΩ, RE=1 kΩ | IC = 1.0263 mA · VCE = 8.7054 V | IC = **1.0263 mA** · VCE = **8.7054 V** · IB = 10.2634 µA · VE = 1.0366 V | 0 | **PASS** | `docs/lab03-a3-emitter.jpeg` |
+| **A4** | Emitter · RB=1000 kΩ, RE=2 kΩ | IC = 0.9401 mA · VCE = 8.0328 V และ **ต้องน้อยกว่า A3** | IC = **0.9401 mA** · VCE = **8.0328 V** · IB = 9.4010 µA · น้อยกว่า A3 (1.0263 → 0.9401 mA) จริง | 0 | **PASS** | ตรวจใน OpenCode Browser (เปลี่ยน RE แล้วกด Calculate ใหม่) |
+| **A5** | Fixed · RB=0 kΩ | error `RB ต้องมีค่ามากกว่า 0` และไม่มีตารางผล | แสดง `RB ต้องมีค่ามากกว่า 0` ในกล่อง error (โหมด Fixed Bias) · **ไม่มี** `DC Bias Results` | — | **PASS** | ตรวจใน OpenCode Browser (snapshot หลัง POST) |
+
+**เกณฑ์ผ่าน:** |ΔIC| ≤ 0.01 mA และ |ΔVCE| ≤ 0.02 V เทียบค่าก่อนปัด · ทุกกรณี Δ = 0 (ค่าที่แสดงตรงกับค่าอ้างอิง 4 ตำแหน่ง)
+
+**สมการที่ใช้คำนวณค่าคาดหมายอิสระ (คำนวณจากใบงานด้วยมือ/Fraction ไม่ใช้โค้ดแอป):**
+
+- Fixed: `IB = (VCC − VBE)/RB`, `VE = 0`, `IC = β·IB`, `VB = VBE`, `VC = VCC − IC·RC`, `VCE = VC`
+- Emitter (แหล่งจ่ายเดียว): `IB = (VCC − VBE)/[RB + (β+1)RE]`, `IC = β·IB`, `IE = (β+1)IB`, `VE = IE·RE`, `VB = VE + VBE`, `VC = VCC − IC·RC`, `VCE = VC − VE`
+- Divider: คงสมการ Exact/Thevenin เดิมของ Lab 02 (§2)
+
+**หมายเหตุวิธีตรวจ:** **Playwright MCP: NOT RUN** — เครื่องนี้ไม่มี `node`/`npx` บน PATH ไม่มี `opencode.json` และ session ไม่มี MCP server `playwright` จึงใช้ **OpenCode Browser** ซึ่งเป็นวิธีสำรองที่ใบงานอนุญาต โดยตารางนี้ระบุวิธีจริงตามที่ใช้
+
+## 7. Lab 03 — ผลรัน Automated Tests ล่าสุด (37 tests)
+
+คำสั่ง: `.venv\Scripts\python.exe -m unittest discover -s tests -v`
+
+```
+Ran 37 tests in 0.051s
+
+OK
+```
+
+- Unit tests (วิศวกรรม): 21 tests (`tests/test_dc_bias.py`) — 11 เดิม + 10 ใหม่ (parse ตามโหมด, Fixed/Emitter reference, A4 ทิศทาง, RB=0, โหมดไม่รู้จัก, cutoff/saturation ของโหมดใหม่, พารามิเตอร์ชุดที่ 2 กัน hardcode)
+- Flask test-client tests: 16 tests (`tests/test_web.py`) — 8 เดิม + 8 ใหม่ (GET ตามโหมด, POST Fixed/Emitter, A4 เปลี่ยน IC, A5 ไม่มีผล, โหมดไม่รู้จัก, คำเตือน Saturation)
+- **รวม 37/37 ผ่าน** และ 19 tests เดิมของ Lab 02 ยังผ่านทั้งหมด
+
 ---
-จัดทำโดย: นักศึกษา ENG29 2121 Lab 02 (2/2569)
-วันที่: 2026-11-10
+จัดทำโดย: นักศึกษา ENG29 2121 Lab 02 (2/2569) · เพิ่มเติม Lab 03 วันที่ 2026-11-17
+วันที่: 2026-11-10 (Lab 02) · 2026-11-17 (Lab 03)

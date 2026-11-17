@@ -57,5 +57,61 @@ class TestWeb(unittest.TestCase):
         rv = self.client.get("/calculate")
         self.assertEqual(rv.status_code, 405)
 
+class TestLab03Modes(unittest.TestCase):
+    def setUp(self):
+        app.config["TESTING"] = True
+        self.client = app.test_client()
+
+    def test_get_mode_fixed_shows_rb_only(self):
+        html = self.client.get("/?mode=fixed").data.decode()
+        self.assertIn('name="rb"', html)
+        self.assertNotIn('name="re"', html)
+        self.assertNotIn('name="r1"', html)
+
+    def test_get_mode_emitter_shows_rb_and_re(self):
+        html = self.client.get("/?mode=emitter").data.decode()
+        self.assertIn('name="rb"', html)
+        self.assertIn('name="re"', html)
+        self.assertNotIn('name="r1"', html)
+
+    def test_post_fixed_reference(self):
+        data = dict(vcc="12", rb="1000", rc="2.2", beta="100", vbe="0.7", mode="fixed")
+        html = self.client.post("/calculate", data=data).data.decode()
+        self.assertIn("Fixed Bias", html)
+        self.assertIn("1.1300", html)
+        self.assertIn("9.5140", html)
+
+    def test_post_emitter_reference(self):
+        data = dict(vcc="12", rb="1000", re="1", rc="2.2", beta="100", vbe="0.7", mode="emitter")
+        html = self.client.post("/calculate", data=data).data.decode()
+        self.assertIn("Emitter Bias", html)
+        self.assertIn("1.0263", html)
+        self.assertIn("8.7054", html)
+
+    def test_post_emitter_more_re_changes_ic(self):
+        data = dict(vcc="12", rb="1000", re="2", rc="2.2", beta="100", vbe="0.7", mode="emitter")
+        html = self.client.post("/calculate", data=data).data.decode()
+        self.assertIn("0.9401", html)
+        self.assertNotIn("1.0263", html)
+
+    def test_post_fixed_invalid_rb_shows_error_no_result(self):
+        data = dict(vcc="12", rb="0", rc="2.2", beta="100", vbe="0.7", mode="fixed")
+        html = self.client.post("/calculate", data=data).data.decode()
+        self.assertIn("RB ต้องมีค่ามากกว่า 0", html)
+        self.assertNotIn("DC Bias Results", html)
+
+    def test_post_unknown_mode_error(self):
+        data = dict(vcc="12", rb="1000", rc="2.2", beta="100", vbe="0.7", mode="bogus")
+        html = self.client.post("/calculate", data=data).data.decode()
+        self.assertIn("โหมดไม่รู้จัก", html)
+        self.assertNotIn("DC Bias Results", html)
+
+    def test_post_emitter_saturation_shows_warning(self):
+        data = dict(vcc="12", rb="1000", re="1", rc="12", beta="100", vbe="0.7", mode="emitter")
+        html = self.client.post("/calculate", data=data).data.decode()
+        self.assertIn("Saturation", html)
+        self.assertIn("แบบจำลอง Forward-Active อาจใช้ไม่ได้", html)
+
+
 if __name__ == "__main__":
     unittest.main()

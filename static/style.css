@@ -119,4 +119,18 @@ td:nth-child(3) { font-family: Consolas, Menlo, monospace; }
 .approx-card { border-style: dashed; }
 .approx-note { color: #546d83; font-size: 0.92rem; }
 
+.mode-card { padding-bottom: 14px; }
+.mode-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.mode-row label { display: inline; font-weight: bold; }
+.mode-row select {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  background: #fff;
+}
+.small { color: #546d83; font-size: 0.88rem; }
+button.secondary { margin-top: 0; background: var(--ok); }
+button.secondary:hover { background: #0d6b5c; }
+
 footer { text-align: center; color: #546d83; font-size: 12px; }
