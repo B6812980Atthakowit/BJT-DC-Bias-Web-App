@@ -3,161 +3,245 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BJT DC Bias Calculator — Fixed / Emitter / Voltage Divider</title>
+  <title>BJT CE Amplifier Simulator v1 — Lab 04</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <main class="container">
-    <h1>BJT DC Bias Web App</h1>
-    <p class="subtitle">วงจรขยาย NPN Common-Emitter — เลือก Fixed Bias, Emitter Bias หรือ Voltage Divider Bias คำนวณโดย Python Backend (Flask)</p>
+    <header class="hero">
+      <p class="eyebrow">ENG29 2121 · Lab 04</p>
+      <h1>BJT CE Amplifier Simulator v1</h1>
+      <p class="subtitle">ต่อยอดจาก Lab 3: คง DC Bias 3 โหมดเดิม และเพิ่มการจำลอง <strong>CE Voltage Divider</strong> ด้วย <strong>ngspice</strong> (.op/.ac/.tran) พร้อมกราฟจากผลรันจริง</p>
+    </header>
 
     <form method="GET" action="/" class="card mode-card">
-      <h2>เลือกวงจรไบอัส</h2>
+      <h2>เลือกโหมด</h2>
       <div class="mode-row">
-        <label for="mode">โหมดวงจร</label>
+        <label for="mode">Mode</label>
         <select name="mode" id="mode">
-          <option value="fixed" {% if mode == 'fixed' %}selected{% endif %}>Fixed Bias — RB</option>
-          <option value="emitter" {% if mode == 'emitter' %}selected{% endif %}>Emitter Bias — RB, RE</option>
-          <option value="divider" {% if mode == 'divider' %}selected{% endif %}>Voltage Divider Bias — R1, R2, RE</option>
+          <option value="fixed" {% if mode == 'fixed' %}selected{% endif %}>Fixed Bias (Lab 3)</option>
+          <option value="emitter" {% if mode == 'emitter' %}selected{% endif %}>Emitter Bias (Lab 3)</option>
+          <option value="divider" {% if mode == 'divider' %}selected{% endif %}>Voltage Divider Bias (Lab 3)</option>
+          <option value="ce_amp" {% if mode == 'ce_amp' %}selected{% endif %}>CE Amplifier Simulator — Voltage Divider (Lab 4, ngspice)</option>
         </select>
         <button type="submit" class="secondary">เปลี่ยนโหมด</button>
       </div>
-      <p class="small">โหมดที่เลือกอยู่ตอนนี้: <strong>{{ mode_label }}</strong> — เปลี่ยนโหมดแล้วกดปุ่มนี้ก่อนกรอกค่า</p>
+      <p class="small">โหมดปัจจุบัน: <strong>{{ mode_label }}</strong> {% if mode == 'ce_amp' %}<span class="badge badge-spice">SPICE Engine</span>{% else %}<span class="badge">Analytical DC</span>{% endif %}</p>
     </form>
 
-    <form method="POST" action="/calculate" class="card form-card">
-      <h2>ค่าอุปกรณ์และพารามิเตอร์ — {{ mode_label }}</h2>
+    <form method="POST" action="/calculate" class="card form-card" id="calc-form">
+      <h2>{% if mode == 'ce_amp' %}CE Amplifier Parameters + Simulation{% else %}ค่าอุปกรณ์และพารามิเตอร์ — {{ mode_label }}{% endif %}</h2>
       <input type="hidden" name="mode" value="{{ mode }}">
 
       {% if errors %}
       <div class="errors" role="alert">
-        <strong>กรอกข้อมูลไม่ถูกต้อง (โหมด {{ mode_label }}):</strong>
-        <ul>
-          {% for e in errors %}
-          <li>{{ e }}</li>
-          {% endfor %}
-        </ul>
+        <strong>พบข้อผิดพลาด ({{ mode_label }}):</strong>
+        <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
       </div>
       {% endif %}
 
+      {% if mode == 'ce_amp' %}
+      <div class="sim-layout">
+        <div>
+          <h3 class="subhead">Bias / Circuit (หน่วย: V, kΩ, µF)</h3>
+          <div class="grid">
+            <label>VCC [V]<input type="number" step="any" name="vcc" value="{{ form.get('vcc','12') }}" required></label>
+            <label>R1 [kΩ]<input type="number" step="any" name="r1" value="{{ form.get('r1','100') }}" required></label>
+            <label>R2 [kΩ]<input type="number" step="any" name="r2" value="{{ form.get('r2','22') }}" required></label>
+            <label>RC [kΩ]<input type="number" step="any" name="rc" value="{{ form.get('rc','2.2') }}" required></label>
+            <label>RE [kΩ] (unbypassed)<input type="number" step="any" name="re" value="{{ form.get('re','1') }}" required></label>
+            <label>RL [kΩ]<input type="number" step="any" name="rl" value="{{ form.get('rl','10') }}" required></label>
+            <label>Cin [µF]<input type="number" step="any" name="cin" value="{{ form.get('cin','10') }}" required></label>
+            <label>Cout [µF]<input type="number" step="any" name="cout" value="{{ form.get('cout','10') }}" required></label>
+            <label>β (beta)<input type="number" step="any" name="beta" value="{{ form.get('beta','100') }}" required></label>
+            <label>VBE [V] (analytical ref)<input type="number" step="any" name="vbe" value="{{ form.get('vbe','0.7') }}" required></label>
+          </div>
+          <h3 class="subhead">Source / Analysis</h3>
+          <div class="grid">
+            <label>Vin amplitude [mV peak]<input type="number" step="any" name="vin_amp" value="{{ form.get('vin_amp','10') }}" required></label>
+            <label>Frequency [kHz]<input type="number" step="any" name="freq" value="{{ form.get('freq','1') }}" required></label>
+            <label>Analysis Mode
+              <select name="analysis" id="analysis">
+                <option value="dc" {% if analysis=='dc' %}selected{% endif %}>DC (.op)</option>
+                <option value="ac" {% if analysis=='ac' %}selected{% endif %}>AC (.ac) Bode</option>
+                <option value="tran" {% if analysis=='tran' %}selected{% endif %}>Transient (.tran)</option>
+              </select>
+            </label>
+            <label class="ac-only">fstart [Hz]<input type="number" step="any" name="fstart" value="{{ form.get('fstart','10') }}"></label>
+            <label class="ac-only">fstop [Hz]<input type="number" step="any" name="fstop" value="{{ form.get('fstop','1000000') }}"></label>
+            <label class="ac-only">points/decade<input type="number" step="1" name="points" value="{{ form.get('points','10') }}"></label>
+            <label class="tran-only">tstop [ms]<input type="number" step="any" name="tstop" value="{{ form.get('tstop','5') }}"></label>
+            <label class="tran-only">tstep [µs]<input type="number" step="any" name="tstep" value="{{ form.get('tstep','10') }}"></label>
+          </div>
+          <p class="small muted">SPICE model: <code>Q2N2222_LAB</code> (NPN, BF=β ที่กรอก, IS=14.34e-15, NF=1) — ใช้เพื่อ reproducible Lab 4 demo. แยกจากผล Analytical Lab 3. Gain อ้างอิง Vin ที่โหนด vin (ก่อน Cin).</p>
+        </div>
+        <div class="circuit-box">
+          <h3 class="subhead">Reference CE Circuit</h3>
+          <svg viewBox="0 0 360 220" class="circuit-svg" role="img" aria-label="CE voltage divider circuit">
+            <defs><marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#456"/></marker></defs>
+            <g fill="none" stroke="#355" stroke-width="2" stroke-linecap="round">
+              <path d="M120 20H250M120 20V50M120 86V135M250 20V50M250 86V110"/>
+              <rect x="113" y="50" width="14" height="36" fill="#fff"/><rect x="243" y="50" width="14" height="36" fill="#fff"/>
+              <circle cx="216" cy="138" r="28" fill="#fff"/>
+              <path d="M120 135H200M200 124V152M200 130L228 110H250M200 146L230 162H250V175"/>
+              <path d="M214 151L230 162M222 159l4-6 4 10z" fill="#355" stroke-width="1"/>
+              <rect x="243" y="175" width="14" height="18" fill="#fff"/><path d="M250 193V205"/>
+              <path d="M120 135V155"/><rect x="113" y="155" width="14" height="28" fill="#fff"/><path d="M120 183V205"/>
+              <path d="M35 135H65M74 135H120M35 135V155M35 182V205"/>
+              <path d="M65 124V146M74 124V146"/><circle cx="35" cy="168" r="13" fill="#fff"/><path d="M27 168q4-5 8 0t8 0" stroke-width="1.5"/>
+              <path d="M250 110H290M299 110H330V145"/><path d="M290 100V120M299 100V120"/><rect x="323" y="145" width="14" height="35" fill="#fff"/><path d="M330 180V205"/>
+              <path d="M35 205H330M185 205v6M177 211h16M180 215h10" stroke-width="2"/>
+            </g>
+            <g fill="#234" font-size="11" font-family="Tahoma,Arial,sans-serif">
+              <text x="185" y="14" text-anchor="middle" font-weight="700">VCC</text>
+              <text x="132" y="72">R1</text><text x="262" y="72">RC</text><text x="132" y="173">R2</text><text x="262" y="188">RE</text>
+              <text x="189" y="182" font-weight="700">Q1 NPN</text><text x="63" y="118">Cin</text><text x="289" y="98">Cout</text>
+              <text x="340" y="165">RL</text><text x="330" y="98">Vout</text><text x="12" y="172">Vin</text>
+            </g>
+          </svg>
+          <p class="small muted">อ้างอิง Lab 04: CE Voltage Divider, RE ไม่ bypass, มี Cin/Cout/RL. ค่า default เป็น fixture สำหรับทดสอบ ไม่ใช่คำตอบสำเร็จรูป.</p>
+        </div>
+      </div>
+      {% else %}
       <div class="grid">
-        <label>VCC [V] — แรงดันจ่าย
-          <input type="number" step="any" name="vcc" placeholder="เช่น 12"
-                 value="{{ form.get('vcc', '') if form else '' }}" required>
-        </label>
-        {% if mode == 'fixed' or mode == 'emitter' %}
-        <label>RB [kΩ] — ตัวต้านทานเบส (1 MΩ = 1000 kΩ)
-          <input type="number" step="any" name="rb" placeholder="เช่น 1000"
-                 value="{{ form.get('rb', '') if form else '' }}" required>
-        </label>
+        <label>VCC [V] — แรงดันจ่าย<input type="number" step="any" name="vcc" value="{{ form.get('vcc','') }}" required></label>
+        {% if mode in ['fixed','emitter'] %}
+        <label>RB [kΩ] — ตัวต้านทานเบส<input type="number" step="any" name="rb" value="{{ form.get('rb','') }}" required></label>
         {% endif %}
         {% if mode == 'divider' %}
-        <label>R1 [kΩ] — บน (VCC–Base)
-          <input type="number" step="any" name="r1" placeholder="เช่น 100"
-                 value="{{ form.get('r1', '') if form else '' }}" required>
-        </label>
-        <label>R2 [kΩ] — ล่าง (Base–GND)
-          <input type="number" step="any" name="r2" placeholder="เช่น 22"
-                 value="{{ form.get('r2', '') if form else '' }}" required>
-        </label>
+        <label>R1 [kΩ]<input type="number" step="any" name="r1" value="{{ form.get('r1','') }}" required></label>
+        <label>R2 [kΩ]<input type="number" step="any" name="r2" value="{{ form.get('r2','') }}" required></label>
         {% endif %}
-        <label>RC [kΩ] — ตัวต้านทานคอลเลกเตอร์
-          <input type="number" step="any" name="rc" placeholder="เช่น 2.2"
-                 value="{{ form.get('rc', '') if form else '' }}" required>
-        </label>
-        {% if mode == 'emitter' or mode == 'divider' %}
-        <label>RE [kΩ] — ตัวต้านทานอิมิตเตอร์
-          <input type="number" step="any" name="re" placeholder="เช่น 1"
-                 value="{{ form.get('re', '') if form else '' }}" required>
-        </label>
+        <label>RC [kΩ]<input type="number" step="any" name="rc" value="{{ form.get('rc','') }}" required></label>
+        {% if mode in ['emitter','divider'] %}
+        <label>RE [kΩ]<input type="number" step="any" name="re" value="{{ form.get('re','') }}" required></label>
         {% endif %}
-        <label>β (beta) — อัตราขยายกระแส
-          <input type="number" step="any" name="beta" placeholder="เช่น 100"
-                 value="{{ form.get('beta', '') if form else '' }}" required>
-        </label>
-        <label>VBE [V] — แรงดันเบส–อิมิตเตอร์
-          <input type="number" step="any" name="vbe" placeholder="เช่น 0.7"
-                 value="{{ form.get('vbe', '') if form else '' }}" required>
-        </label>
+        <label>β (beta)<input type="number" step="any" name="beta" value="{{ form.get('beta','') }}" required></label>
+        <label>VBE [V]<input type="number" step="any" name="vbe" value="{{ form.get('vbe','') }}" required></label>
       </div>
+      {% endif %}
 
-      <button type="submit">Calculate DC Bias</button>
+      <div class="actions">
+        <button type="submit">{% if mode == 'ce_amp' %}Run Simulation{% else %}Calculate DC Bias{% endif %}</button>
+        {% if mode == 'ce_amp' %}<span class="small muted">ผล SPICE ได้จาก ngspice จริง (subprocess) — ไม่ใช่ค่าจำลอง hard-code</span>{% endif %}
+      </div>
     </form>
 
     {% if result %}
     <section class="card result-card">
-      <h2>DC Bias Results — {{ mode_label }} · จุดปฏิบัติการ (Operating Point)</h2>
-
-      <p class="region-badge region-{{ result.region }}">
-        Operating Region:
-        {% if result.region == 'forward-active' %}Forward-Active
-        {% elif result.region == 'cutoff' %}Cutoff
-        {% else %}Saturation{% endif %}
-      </p>
-
-      <table>
-        <thead>
-          <tr><th>ปริมาณ</th><th>สัญลักษณ์</th><th>ค่า</th><th>หน่วย</th></tr>
-        </thead>
-        <tbody>
-          {% if result.vth is defined %}
-          <tr><td>แรงดันเทวินอร์ทีเวียน</td><td>VTH</td><td>{{ "%.4f"|format(result.vth) }}</td><td>V</td></tr>
-          <tr><td>ความต้านทานเทวิน</td><td>RTH</td><td>{{ "%.4f"|format(result.rth / 1000) }}</td><td>kΩ</td></tr>
-          {% endif %}
-          <tr><td>แรงดันเบส</td><td>VB</td><td>{{ "%.4f"|format(result.vb) }}</td><td>V</td></tr>
-          <tr><td>แรงดันอิมิตเตอร์</td><td>VE</td><td>{{ "%.4f"|format(result.ve) }}</td><td>V</td></tr>
-          <tr><td>แรงดันคอลเลกเตอร์</td><td>VC</td><td>{{ "%.4f"|format(result.vc) }}</td><td>V</td></tr>
-          <tr><td>แรงดันคอลเลกเตอร์–อิมิตเตอร์</td><td>VCE</td><td>{{ "%.4f"|format(result.vce) }}</td><td>V</td></tr>
-          <tr><td>กระแสเบส</td><td>IB</td><td>{{ "%.4f"|format(result.ib * 1e6) }}</td><td>µA</td></tr>
-          <tr><td>กระแสคอลเลกเตอร์</td><td>IC</td><td>{{ "%.4f"|format(result.ic * 1000) }}</td><td>mA</td></tr>
-          <tr><td>กระแสอิมิตเตอร์</td><td>IE</td><td>{{ "%.4f"|format(result.ie * 1000) }}</td><td>mA</td></tr>
-        </tbody>
-      </table>
-
-      {% if result.warnings %}
-      <div class="warnings" role="alert">
-        {% for w in result.warnings %}
-        <p>{{ w }}</p>
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      <p class="model-note">แบบจำลอง: Forward-Active Approximation (β และ VBE คงที่)</p>
+      <h2>DC Bias Results — {{ mode_label }} (Analytical)</h2>
+      <p class="region-badge region-{{ result.region }}">Operating Region: {% if result.region=='forward-active' %}Forward-Active{% elif result.region=='cutoff' %}Cutoff{% else %}Saturation{% endif %}</p>
+      <table><thead><tr><th>ปริมาณ</th><th>สัญลักษณ์</th><th>ค่า</th><th>หน่วย</th></tr></thead><tbody>
+        {% if result.vth is defined %}<tr><td>แรงดัน Thevenin</td><td>VTH</td><td>{{ "%.4f"|format(result.vth) }}</td><td>V</td></tr>
+        <tr><td>ความต้านทาน Thevenin</td><td>RTH</td><td>{{ "%.4f"|format(result.rth/1000) }}</td><td>kΩ</td></tr>{% endif %}
+        <tr><td>แรงดันเบส</td><td>VB</td><td>{{ "%.4f"|format(result.vb) }}</td><td>V</td></tr>
+        <tr><td>แรงดันอิมิตเตอร์</td><td>VE</td><td>{{ "%.4f"|format(result.ve) }}</td><td>V</td></tr>
+        <tr><td>แรงดันคอลเลกเตอร์</td><td>VC</td><td>{{ "%.4f"|format(result.vc) }}</td><td>V</td></tr>
+        <tr><td>แรงดันคอลเลกเตอร์–อิมิตเตอร์</td><td>VCE</td><td>{{ "%.4f"|format(result.vce) }}</td><td>V</td></tr>
+        <tr><td>กระแสเบส</td><td>IB</td><td>{{ "%.4f"|format(result.ib*1e6) }}</td><td>µA</td></tr>
+        <tr><td>กระแสคอลเลกเตอร์</td><td>IC</td><td>{{ "%.4f"|format(result.ic*1000) }}</td><td>mA</td></tr>
+        <tr><td>กระแสอิมิตเตอร์</td><td>IE</td><td>{{ "%.4f"|format(result.ie*1000) }}</td><td>mA</td></tr>
+      </tbody></table>
+      {% if result.warnings %}<div class="warnings" role="alert">{% for w in result.warnings %}<p>{{ w }}</p>{% endfor %}</div>{% endif %}
+      <p class="model-note">ที่มา: Analytical Forward-Active Approximation (Python dc_bias.py, β/VBE คงที่)</p>
     </section>
     {% endif %}
 
-    {% if result and mode == 'divider' and approx %}
+    {% if approx %}
     <section class="card approx-card">
       <h2>เปรียบเทียบ: วิธี Approximate (Stiff Voltage Divider)</h2>
-      <p class="approx-note">
-        วิธีประมาณพื้นฐาน: ถือว่า voltage divider แข็งแรงพอให้
-        <strong>VB = VTH</strong> (ละเลยกระแสโหลดของเบส) —
-        VE = VB − VBE, IE = VE/RE, IC = IE·β/(β+1)
-      </p>
-      <table>
-        <thead>
-          <tr><th>ปริมาณ</th><th>สัญลักษณ์</th><th>ค่า (Approximate)</th><th>หน่วย</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>แรงดันเบส</td><td>VB</td><td>{{ "%.4f"|format(approx.vb) }}</td><td>V</td></tr>
-          <tr><td>แรงดันอิมิตเตอร์</td><td>VE</td><td>{{ "%.4f"|format(approx.ve) }}</td><td>V</td></tr>
-          <tr><td>แรงดันคอลเลกเตอร์</td><td>VC</td><td>{{ "%.4f"|format(approx.vc) }}</td><td>V</td></tr>
-          <tr><td>แรงดันคอลเลกเตอร์–อิมิตเตอร์</td><td>VCE</td><td>{{ "%.4f"|format(approx.vce) }}</td><td>V</td></tr>
-          <tr><td>กระแสเบส</td><td>IB</td><td>{{ "%.4f"|format(approx.ib * 1e6) }}</td><td>µA</td></tr>
-          <tr><td>กระแสคอลเลกเตอร์</td><td>IC</td><td>{{ "%.4f"|format(approx.ic * 1000) }}</td><td>mA</td></tr>
-          <tr><td>กระแสอิมิตเตอร์</td><td>IE</td><td>{{ "%.4f"|format(approx.ie * 1000) }}</td><td>mA</td></tr>
-        </tbody>
-      </table>
-      <p class="approx-note">
-        ตารางหลักด้านบนเป็นวิธี Exact/Thevenin ตามสมการในเอกสาร Lab ซึ่งคำนึงผลกระทบของ RTH ต่อกระแสเบส
-        จึงได้ค่าต่างกันเล็กน้อย (ยิ่ง R2 เทียบ R1 เล็ก ทั้งสองวิธียิ่งใกล้กัน)
-      </p>
+      <table><thead><tr><th>ปริมาณ</th><th>สัญลักษณ์</th><th>ค่า</th><th>หน่วย</th></tr></thead><tbody>
+        <tr><td>แรงดันเบส</td><td>VB</td><td>{{ "%.4f"|format(approx.vb) }}</td><td>V</td></tr>
+        <tr><td>แรงดันอิมิตเตอร์</td><td>VE</td><td>{{ "%.4f"|format(approx.ve) }}</td><td>V</td></tr>
+        <tr><td>แรงดันคอลเลกเตอร์</td><td>VC</td><td>{{ "%.4f"|format(approx.vc) }}</td><td>V</td></tr>
+        <tr><td>แรงดันคอลเลกเตอร์–อิมิตเตอร์</td><td>VCE</td><td>{{ "%.4f"|format(approx.vce) }}</td><td>V</td></tr>
+        <tr><td>กระแสเบส</td><td>IB</td><td>{{ "%.4f"|format(approx.ib*1e6) }}</td><td>µA</td></tr>
+        <tr><td>กระแสคอลเลกเตอร์</td><td>IC</td><td>{{ "%.4f"|format(approx.ic*1000) }}</td><td>mA</td></tr>
+        <tr><td>กระแสอิมิตเตอร์</td><td>IE</td><td>{{ "%.4f"|format(approx.ie*1000) }}</td><td>mA</td></tr>
+      </tbody></table>
+    </section>
+    {% endif %}
+
+    {% if mode == 'ce_amp' and (spice or analytical) %}
+    <section class="card result-card">
+      <h2>Simulation Results — CE Voltage Divider</h2>
+      <div class="status-row">
+        <span class="badge badge-spice">Engine: {{ spice.engine if spice else "ngspice" }}{% if spice and spice.engine_version %} {{ spice.engine_version }}{% endif %}</span>
+        <span class="badge">Model: {{ spice.model if spice else "Q2N2222_LAB" }}</span>
+        {% if spice %}<span class="badge badge-ok">Run: {{ spice.run_status }}</span><span class="badge">Analysis: {{ analysis|upper }}</span>{% else %}<span class="badge" style="background:#fdeceb;color:#b3261e">Run: error</span>{% endif %}
+      </div>
+
+      {% if analytical %}
+      <h3 class="subhead">Analytical Reference (dc_bias.py, Lab 3 assumptions)</h3>
+      <div class="kv-grid">
+        <div><span>VB</span><strong>{{ "%.4f"|format(analytical.vb) }} V</strong></div>
+        <div><span>VE</span><strong>{{ "%.4f"|format(analytical.ve) }} V</strong></div>
+        <div><span>VC</span><strong>{{ "%.4f"|format(analytical.vc) }} V</strong></div>
+        <div><span>VCE</span><strong>{{ "%.4f"|format(analytical.vce) }} V</strong></div>
+        <div><span>IC</span><strong>{{ "%.4f"|format(analytical.ic*1000) }} mA</strong></div>
+        <div><span>Region</span><strong>{{ analytical.region }}</strong></div>
+      </div>
+      <p class="small muted">Reference นี้ใช้ β/VBE คงที่ และไม่รวม Cin/Cout/RL/source loading แบบเดียวกับ SPICE transient; ใช้เปรียบเทียบแนวโน้มเท่านั้น</p>
+      {% endif %}
+
+      {% if spice and analysis == 'dc' and spice.dc %}
+      <h3 class="subhead">SPICE DC Operating Point (.op)</h3>
+      <table><thead><tr><th>ปริมาณ</th><th>สัญลักษณ์</th><th>SPICE</th><th>หน่วย</th></tr></thead><tbody>
+        <tr><td>แรงดันเบส</td><td>VB</td><td>{{ "%.6f"|format(spice.dc.vb) }}</td><td>V</td></tr>
+        <tr><td>แรงดันอิมิตเตอร์</td><td>VE</td><td>{{ "%.6f"|format(spice.dc.ve) }}</td><td>V</td></tr>
+        <tr><td>แรงดันคอลเลกเตอร์</td><td>VC</td><td>{{ "%.6f"|format(spice.dc.vc) }}</td><td>V</td></tr>
+        <tr><td>แรงดันคอลเลกเตอร์–อิมิตเตอร์</td><td>VCE</td><td>{{ "%.6f"|format(spice.dc.vce) }}</td><td>V</td></tr>
+        <tr><td>กระแสคอลเลกเตอร์ (ประมาณจาก node)</td><td>IC≈(VCC-VC)/RC</td><td>{{ "%.6f"|format(spice.dc.ic*1000) }}</td><td>mA</td></tr>
+        <tr><td>กระแสอิมิตเตอร์ (ประมาณจาก node)</td><td>IE≈VE/RE</td><td>{{ "%.6f"|format(spice.dc.ie*1000) }}</td><td>mA</td></tr>
+        <tr><td>กระแสเบส (ประมาณ)</td><td>IB≈IE-IC</td><td>{{ "%.6f"|format(spice.dc.ib*1e6) }}</td><td>µA</td></tr>
+      </tbody></table>
+      <p class="small muted">ที่มา: ค่าจาก ngspice <code>.op</code> print v(vb),v(ve),v(vc)...; IC/IE/IB คำนวณจาก node voltages และ R ที่ผู้ใช้กรอกเพื่อแสดงผลทางวิศวกรรม</p>
+      {% endif %}
+
+      {% if spice and analysis == 'ac' and spice.ac %}
+      <h3 class="subhead">AC Frequency Response (.ac)</h3>
+      <div class="kv-grid">
+        <div><span>Points</span><strong>{{ spice.ac_summary.points }}</strong></div>
+        <div><span>f min</span><strong>{{ "%.3g"|format(spice.ac_summary.fmin_hz) }} Hz</strong></div>
+        <div><span>f max</span><strong>{{ "%.3g"|format(spice.ac_summary.fmax_hz) }} Hz</strong></div>
+        <div><span>Max Gain</span><strong>{% if spice.ac_summary.max_gain_db is not none %}{{ "%.3f"|format(spice.ac_summary.max_gain_db) }} dB{% else %}n/a{% endif %}</strong></div>
+      </div>
+      <div class="plot-wrap"><canvas id="ac-mag" width="900" height="280" aria-label="Bode magnitude plot"></canvas></div>
+      <div class="plot-wrap"><canvas id="ac-phase" width="900" height="240" aria-label="Bode phase plot"></canvas></div>
+      <p class="small muted">ที่มา: ngspice <code>.ac dec ...</code> + <code>wrdata</code> v(vin),v(vout). Gain = |Vout|/|Vin|, Phase = ∠Vout-∠Vin. Vin คือโหนด vin (ก่อน Cin). ค่าเป็นผลรันจริง ไม่ hard-code.</p>
+      {% endif %}
+
+      {% if spice and analysis == 'tran' and spice.tran %}
+      <h3 class="subhead">Transient Response (.tran)</h3>
+      <div class="kv-grid">
+        <div><span>Points</span><strong>{{ spice.tran_summary.points }}</strong></div>
+        <div><span>t stop</span><strong>{{ "%.4g"|format(spice.tran_summary.tstop_s*1000) }} ms</strong></div>
+        <div><span>Vin p-p</span><strong>{{ "%.4g"|format(spice.tran_summary.vin_pp_v*1000) }} mV</strong></div>
+        <div><span>Vout p-p</span><strong>{{ "%.4g"|format(spice.tran_summary.vout_pp_v*1000) }} mV</strong></div>
+      </div>
+      <div class="plot-wrap"><canvas id="tran-plot" width="900" height="320" aria-label="Transient waveform plot"></canvas></div>
+      <p class="small muted">ที่มา: ngspice <code>.tran</code> + <code>wrdata</code> time,v(vin),v(vout). สังเกต Vout ควรกลับเฟสกับ Vin สำหรับ CE amplifier (ขึ้นกับความถี่/โหลด).</p>
+      {% endif %}
+
+      {% if spice %}
+      <details class="details"><summary>Netlist / ngspice log (หลักฐานการรันจริง)</summary>
+        <div class="two-col">
+          <div><h4>Netlist</h4><pre><code>{{ spice.netlist }}</code></pre></div>
+          <div><h4>Log excerpt</h4><pre><code>{{ spice.log_excerpt }}</code></pre></div>
+        </div>
+      </details>
+      {% endif %}
     </section>
     {% endif %}
 
     <footer>
-      <p>ENG29 2121 · Lab 03 — Flask + Python Backend · เลือกวงจรได้ 3 แบบ · คำนวณที่ Server ทุกครั้งที่กด Calculate</p>
+      <p>ENG29 2121 · Lab 04 — Flask + Python + ngspice · คง Lab 3 DC Bias 3 โหมด · เพิ่ม CE SPICE .op/.ac/.tran</p>
     </footer>
   </main>
+
+  <script>
+    window.SPICE_DATA = {{ {'analysis': analysis|default('dc'), 'spice': spice|default(none)} | tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

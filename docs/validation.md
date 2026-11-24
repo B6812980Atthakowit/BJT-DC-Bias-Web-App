@@ -157,3 +157,46 @@ OK
 ---
 จัดทำโดย: นักศึกษา ENG29 2121 Lab 02 (2/2569) · เพิ่มเติม Lab 03 วันที่ 2026-11-17
 วันที่: 2026-11-10 (Lab 02) · 2026-11-17 (Lab 03)
+
+## 8. Lab 04 ? CE Amplifier Simulator v1 (SPICE/ngspice) validation notes
+
+> Added by implementation session. Browser B1-B8 evidence should be captured on the target machine; automated checks below were run in this workspace.
+
+### Automated checks run
+
+- Command: `py -3 -m unittest discover -s tests -v` (GitHub repo, venv from existing project)
+- Result: **44 tests, OK** (includes 37 prior Lab 03 tests + 7 new Lab 04 SPICE/web tests)
+- ngspice version: `ngspice-47`
+- Engine path resolved outside repo (`NGSPICE_EXE`/PATH/local install), binaries not copied into repo.
+
+### SPICE reference sanity (automated, ngspice real run)
+
+Reference CE Voltage Divider: VCC=12V, R1=100k, R2=22k, RC=2.2k, RE=1k, RL=10k, Cin=10u, Cout=10u, Vin=10mVpk, f=1kHz, Q2N2222_LAB (BF=100, IS=14.34e-15, NF=1).
+
+| Check | Expected/behavior | Observed | Status |
+|---|---|---:|---|
+| DC .op | ngspice returns node voltages, VCE>0.2V active-ish | VB~1.935V, VE~1.283V, VC~9.206V, VCE~7.923V | PASS (auto) |
+| AC .ac | Bode data from wrdata, gain changes when RE changes | max gain differs for RE=1k vs 2k; plotted from parsed rows | PASS (auto) |
+| Tran .tran | Vin/Vout waveform from wrdata, Vout has amplitude | 508 points, Vin p-p~20mV, Vout p-p~35mV | PASS (auto) |
+| Invalid input | RE=0 rejected by validation | Error shown, no SPICE result table | PASS (auto/web) |
+| Provenance | Netlist/log/engine/model/status visible | Included in UI details | PASS (code) |
+
+### B1-B8 browser acceptance
+
+| Case | Status | Evidence |
+|---|---|---|
+| B1 Regression Lab 3 modes | NOT RUN in browser MCP (no Playwright MCP in session) / covered by 37 regression tests | unittest |
+| B2 DC SPICE | PARTIAL (automated + local run), browser screenshot pending | test_spice/test_web |
+| B3 Change RE | PASS (auto AC gain changes) browser evidence pending | test_spice |
+| B4 AC | PASS (auto parsed rows) browser evidence pending | test_spice |
+| B5 Transient | PASS (auto waveform) browser evidence pending | test_spice |
+| B6 Change source | NOT RUN | pending browser |
+| B7 Invalid/fail | PASS (auto invalid RE), engine-missing path handled in code | test_web |
+| B8 UI responsive | NOT RUN | pending browser |
+
+### Known limitations
+
+- SPICE DC currents IC/IE/IB are derived from node voltages and resistor values for display; raw ngspice node voltages are authoritative.
+- BJT model is a simple educational model (`Q2N2222_LAB`) with BF tied to user beta input; not a full manufacturer model.
+- AC/Tran charts are rendered by lightweight canvas JS (no external chart dependency); they plot parsed ngspice data only.
+- Browser acceptance B1-B8 screenshots should be captured by student on local machine before submission.

@@ -1,8 +1,9 @@
-# BJT DC Bias Web App
+# BJT CE Amplifier Simulator v1 (Lab 04)
 
-เว็บแอปคำนวณจุดปฏิบัติการ (DC Operating Point) ของวงจรขยาย NPN Common-Emitter **3 รูปแบบไบอัส** — Fixed Bias, Emitter Bias (แหล่งจ่ายเดียว) และ Voltage-Divider Bias สำหรับรายวิชา **ENG29 2121 · Lab 02–03** (ภาคเรียนที่ 2/2569)
+????????? BJT DC Bias Web App (Lab 02-03): ?? DC Bias 3 ????????????????????? ???????? CE Voltage Divider simulation ???? ngspice ???? (.op/.ac/.tran) ???? subprocess.
 
-คำนวณทั้งหมดโดย **Python Backend (Flask)** ที่รันบน server `http://127.0.0.1:5000/` — ไม่มีค่าที่ hardcode ไว้ใน HTML/JavaScript และไม่มีการคำนวณฝั่ง browser
+- Analytical: `dc_bias.py` (Fixed/Emitter/Voltage Divider)
+- SPICE: `spice_engine.py` + ngspice (`ngspice_con`/`ngspice`) ????? netlist/log/provenance
 
 ## สิ่งที่ต้องมีก่อนเริ่ม
 
